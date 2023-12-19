@@ -1,0 +1,7 @@
+openai_api_type: 'azure'
+openai_api_base: 'https://your-project-name.openai.azure.com/'
+openai_api_version: '2023-05-15'
+deployment_name: 'your-deployment-nam'
+deployment_name_embeddigns: 'embeddings-ada-002'
+INDEX_NAME: 'your-index-name'
+ENGINE: 'embeddings-ada-002'
