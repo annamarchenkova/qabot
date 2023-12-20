@@ -4,7 +4,7 @@ import yaml
 import logging
 import json
 import requests
-
+import pinecone
 import openai
 from openai.embeddings_utils import get_embeddings, get_embedding
 from datetime import datetime
@@ -33,8 +33,13 @@ def my_hash(s):
     return hashlib.md5(s.encode()).hexdigest()
 
 
-def prepare_for_pinecone(texts, engine):
-    # print(engine)
+def prepare_for_pinecone(texts, engine, cnf):
+
+    openai.api_type = cnf['openai_api_type']
+    openai.api_key = open(os.path.join(PROJECT_DIR, "keys", cnf['azure_openai_key_file']), "r").read().strip("\n")
+    openai.api_base = cnf['openai_api_base'] # endpoint
+    openai.api_version = cnf['openai_api_version']
+    
     # Get the current UTC date and time
     now = datetime.utcnow()
 
@@ -61,8 +66,19 @@ def prepare_for_pinecone(texts, engine):
 
 # Without namespaces that are not supported for the free tier
 def upload_texts_to_pinecone(
-    texts, engine, index, batch_size=None, show_progress_bar=False
+    texts, engine, pinecone_key, index_name, batch_size=None, show_progress_bar=False
 ):
+    pinecone.init(api_key=pinecone_key, environment="gcp-starter")
+
+    if not index_name in pinecone.list_indexes():
+        pinecone.create_index(
+            index_name,  # The name of the index
+            dimension=1536,  # The dimensionality of the vectors
+            metric='cosine',  # The similarity metric to use when searching the index
+            pod_type="p1",  # The type of Pinecone pod
+        )
+    index = pinecone.Index(index_name)
+    
     # Call the prepare_for_pinecone function to prepare the input texts for indexing
     total_upserted = 0
     if not batch_size:
@@ -84,10 +100,21 @@ def upload_texts_to_pinecone(
     return total_upserted
 
 
-def query_from_pinecone(query, engine, index, top_k=3):
+def query_from_pinecone(query, engine, pinecone_key, index_name, top_k=3):
+    
     # get embedding from THE SAME embedder as the documents
     query_embedding = get_embedding(query, engine=engine)
 
+    pinecone.init(api_key=pinecone_key, environment="gcp-starter")
+    if not index_name in pinecone.list_indexes():
+        pinecone.create_index(
+            index_name,  # The name of the index
+            dimension=1536,  # The dimensionality of the vectors
+            metric='cosine',  # The similarity metric to use when searching the index
+            pod_type="p1",  # The type of Pinecone pod
+        )
+    index = pinecone.Index(index_name)
+    
     return index.query(
         vector=query_embedding,
         top_k=top_k,
@@ -120,9 +147,13 @@ def get_best_results_from_pinecone(query):
     return response.json()["documents"][0]
 
 
-def get_results_from_pinecone(query, engine, index, top_k=3, verbose=True):
+def get_results_from_pinecone(query, engine, pinecone_key, index_name, top_k=3, verbose=True):
     results_from_pinecone = query_from_pinecone(
-        query, top_k=top_k, engine=engine, index=index
+        query, 
+        top_k=top_k, 
+        engine=engine, 
+        pinecone_key=pinecone_key, 
+        index_name=index_name,
     )
     if not results_from_pinecone:
         return []
@@ -178,7 +209,9 @@ def get_texts_from_pinecone_results(results):
 def gen_Q_A(
     query,
     engine,
-    index,
+    index_name,
+    pinecone_key,
+    openai_api_key,
     specify_output=" ",
     qa_engine="azure",
     azure_engine="gpt-note-crm",
@@ -190,7 +223,8 @@ def gen_Q_A(
         query,
         top_k=n_results_to_use,
         engine=engine,
-        index=index,
+        pinecone_key=pinecone_key,
+        index_name=index_name,
         verbose=verbose,
     )
     texts = get_texts_from_pinecone_results(results)
@@ -204,6 +238,7 @@ Question: {query}
 Answer:""".strip()
 
     if qa_engine == "azure":
+        openai.api_key = openai_api_key
         answer = test_prompt_openai(
             PROMPT,
             engine=azure_engine,
