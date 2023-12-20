@@ -1,5 +1,4 @@
 import streamlit as st
-import time
 import os
 import openai
 from langchain.text_splitter import CharacterTextSplitter
@@ -39,37 +38,20 @@ def main():
     cnf = load_config(cnf_dir=PROJECT_DIR, cnf_name="config.yml")
 
     pinecone_key = open(os.path.join(PROJECT_DIR, "keys", "pinecone_key.txt"), "r").read().strip("\n")
-    openai.api_type = cnf['openai_api_type']
-    openai.api_key = open(os.path.join(PROJECT_DIR, "keys", "azure_openai_key.txt"), "r").read().strip("\n")
-    openai.api_base = cnf['openai_api_type']
-    openai.api_version = cnf['openai_api_type']
+    pinecone_key = open(os.path.join(PROJECT_DIR, "keys", cnf["pinecone_key_file"]), "r").read().strip("\n")
+    openai_api_key = open(os.path.join(PROJECT_DIR, "keys", cnf["azure_openai_key_file"]), "r").read().strip("\n")
+
     deployment_name = cnf['deployment_name']
     
-    os.environ['OPENAI_API_KEY'] = openai.api_key
-    os.environ['OPENAI_API_VERSION'] = openai.api_version
-    os.environ['OPENAI_API_BASE'] = openai.api_base
-    
     # PINECONE index
-    INDEX_NAME = cnf['index_name']
-    ENGINE = cnf['engine']
+    index_name = cnf['index_name']
+    pinecone_engine = cnf['engine']
 
     t_splitter = CharacterTextSplitter(
         separator="\n", 
         chunk_size=500, 
         chunk_overlap=10,
         )
-    
-    pinecone.init(api_key=pinecone_key, environment="gcp-starter")
-
-    if not INDEX_NAME in pinecone.list_indexes():
-        pinecone.create_index(
-            INDEX_NAME,  # The name of the index
-            dimension=1536,  # The dimensionality of the vectors
-            metric='cosine',  # The similarity metric to use when searching the index
-            pod_type="p1",  # The type of Pinecone pod
-        )
-    index = pinecone.Index(INDEX_NAME)
-
 
     # Button to trigger document upload
     if st.button("Upload text documents"):
@@ -84,7 +66,15 @@ def main():
                     text = f.read()
                 
                 texts = t_splitter.split_text(text)
-                upload_texts_to_pinecone(texts, engine=ENGINE, index=index, batch_size=5, show_progress_bar=True)
+                texts = [i for i in texts if len(i) > cnf['min_chunk_len']]
+                upload_texts_to_pinecone(
+                    texts, 
+                    engine=pinecone_engine, 
+                    pinecone_key=pinecone_key,
+                    index_name=index_name,
+                    batch_size=5, 
+                    show_progress_bar=True,
+                    )
                 st.success('Uploaded document {filename}')
 
         st.success('All documents uploaded successfully!')
@@ -105,10 +95,9 @@ def main():
         )
     try:
         n_results_to_use = int(n_results_to_use)
+        if not 1<= n_results_to_use <= 10:
+            st.error('Enter a number from 1 to 10')
     except:
-        st.error('Enter a number from 1 to 10')
-
-    if not 1<= n_results_to_use <= 10:
         st.error('Enter a number from 1 to 10')
 
     # max_tokens
@@ -118,21 +107,22 @@ def main():
         )
     try:
         max_tokens = int(max_tokens)
+        if not 1<= max_tokens <= 200:
+            st.error('Enter a number from 1 to 200')
     except:
-        st.error('Enter a number from 1 to 200')
-
-    if not 1<= max_tokens <= 200:
         st.error('Enter a number from 1 to 200')
 
     # Answer
     if st.button("Get answer"):
         answer, chunks = gen_Q_A(
                     query=question,
-                    engine=ENGINE,
-                    azure_engine=deployment_name,
-                    index=index,
+                    engine=pinecone_engine,
+                    index_name=index_name,
+                    pinecone_key=pinecone_key,
+                    openai_api_key=openai_api_key,
                     specify_output=specify_output,
                     qa_engine=openai.api_type,
+                    azure_engine=deployment_name,
                     n_results_to_use=n_results_to_use,
                     max_tokens=max_tokens,
                     verbose=False,
