@@ -1,1 +1,44 @@
 # RAG app to chat with your documents
+
+## Installation
+Install requirements into your python environment
+`pip install -r requirements.txt`
+
+## Folder structure
+```
+qabot/
+└─── data/
+    └─── texts/
+        |    example_text.txt
+
+└─── src/
+    |    PaLM_final_version.ipynb
+    |    utils.py
+    |    project_dirs.py
+    |    config.yml
+    |    requirements.txt
+    |    README.md
+config.yml
+
+```
+
+- folder `data`: subfolders with text documents to analyze
+- folder `src`: folder with code files
+
+# Parameters in `config.yml`
+- openai_api_type: 'azure' # if using Azure OpenAI
+- openai_api_base: 'https://your-project-name.openai.azure.com/'
+- openai_api_version: '2023-05-15'
+- deployment_name: 'your-deployment-name'
+- index_name: 'your-index-name' # pinecone index name
+- engine: 'embeddings-ada-002' # Azure OpenAI embedding deployment name
+- pinecone_key_file: pinecone_key.txt # file name in the folder `keys` with pinecone key
+- azure_openai_key_file: azure_openai_key.txt # file name in the folder `keys` with azure openai key
+- min_chunk_len: 200 # chunks smaller than this size will be discarded.
+
+# Use
+1. run streamlit UI
+> streamlit run app.py
+
+2. Follow instructions in the UI
+
