@@ -67,14 +67,47 @@ def main():
                 
                 texts = t_splitter.split_text(text)
                 texts = [i for i in texts if len(i) > cnf['min_chunk_len']]
-                upload_texts_to_pinecone(
-                    texts, 
-                    engine=pinecone_engine, 
-                    pinecone_key=pinecone_key,
-                    index_name=index_name,
-                    batch_size=5, 
-                    show_progress_bar=True,
+                  
+                # upload_texts_to_pinecone(
+                #     texts, 
+                #     engine=pinecone_engine, 
+                #     pinecone_key=pinecone_key,
+                #     index_name=index_name,
+                #     batch_size=5, 
+                #     show_progress_bar=True,
+                #     )
+
+                # Initiate pinecone, create index
+                pinecone.init(api_key=pinecone_key, environment="gcp-starter")
+
+                if not index_name in pinecone.list_indexes():
+                    pinecone.create_index(
+                        index_name,  # The name of the index
+                        dimension=1536,  # The dimensionality of the vectors
+                        metric='cosine',  # The similarity metric to use when searching the index
+                        pod_type="p1",  # The type of Pinecone pod
                     )
+                index = pinecone.Index(index_name)
+                
+                # Prepare the input texts for indexing
+                total_upserted = 0
+                batch_size = cnf['batch_size']
+                if not batch_size:
+                    batch_size = len(texts)
+
+                progress_bar = st.progress(len(texts))
+                _range = range(0, len(texts), batch_size)
+                for i in _range:
+                    batch = texts[i : i + batch_size]
+                    prepared_texts = prepare_for_pinecone(batch, engine=engine)
+                    progress_bar.progress(i/len(texts))
+            
+                    # Upload the texts to Pinecone
+                    total_upserted += index.upsert(
+                        prepared_texts,
+                        # namespace=namespace
+                    )["upserted_count"]
+                    
                 st.success('Uploaded document {filename}')
 
         st.success('All documents uploaded successfully!')
