@@ -7,3 +7,4 @@ engine: 'embeddings-ada-002'
 pinecone_key_file: pinecone_key.txt
 azure_openai_key_file: azure_openai_key.txt
 min_chunk_len: 200
+batch_size: 5
